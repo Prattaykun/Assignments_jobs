@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ShareRole {
+  VIEWER
+  EDITOR
+}
+
+model User {
+  id           String          @id @default(cuid())
+  email        String          @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime        @default(now())
+  documents    Document[]      @relation("OwnedDocuments")
+  shares       DocumentShare[]
+  folders      Folder[]
+}
+
+model Folder {
+  id        String     @id @default(cuid())
+  name      String
+  ownerId   String
+  parentId  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  owner     User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  parent    Folder?    @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Folder[]   @relation("FolderTree")
+  documents Document[]
+
+  @@index([ownerId, parentId])
+  @@index([parentId])
+}
+
+model Document {
+  id          String          @id @default(cuid())
+  title       String
+  contentJson Json
+  ownerId     String
+  folderId    String?
+  owner       User            @relation("OwnedDocuments", fields: [ownerId], references: [id], onDelete: Cascade)
+  folder      Folder?         @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  shares      DocumentShare[]
+  attachments Attachment[]
+
+  @@index([ownerId])
+  @@index([folderId])
+}
+
+model DocumentShare {
+  id         String    @id @default(cuid())
+  documentId String
+  userId     String
+  role       ShareRole
+  createdAt  DateTime  @default(now())
+  document   Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([userId])
+}
+
+model Attachment {
+  id         String   @id @default(cuid())
+  documentId String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}

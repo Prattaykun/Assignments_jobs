@@ -1,0 +1,10 @@
+docs
+node_modules
+.next
+.git
+*.md
+!README.md
+!ARCHITECTURE.md
+!AI_WORKFLOW.md
+!SUBMISSION.md
+WALKTHROUGH_URL.txt

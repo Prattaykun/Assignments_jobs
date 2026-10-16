@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wordcraft Docs
 
-## Getting Started
+A scoped full-stack document product: create and edit rich-text documents, import `.txt`/`.md`, attach files, and share with seeded users. Built with **Next.js** (App Router) and **Neon Postgres**.
 
-First, run the development server:
+UI/UX cues were taken from the Casual Docs reference under `docs/` (left out of the app build). The editor itself is **TipTap**, not the full Casual Docs / OOXML engine.
+
+## Live demo
+
+- **Live URL:** https://wordcraft-docs.vercel.app
+
+## Seeded reviewer accounts
+
+| Email | Password | Role in demos |
+| --- | --- | --- |
+| `alice@example.com` | `password123` | Document owner |
+| `bob@example.com` | `password123` | Share recipient |
+
+## Supported file types
+
+| Feature | Types | Limits |
+| --- | --- | --- |
+| **Import → new document** | `.txt`, `.md` | Max 1 MB |
+| **Attachments** | `.pdf`, `.png`, `.jpg`, `.txt`, `.md` | Max 2 MB each |
+
+These limits are also shown in the UI.
+
+## Local setup
+
+Prerequisites: Node.js 20+, npm, and a Postgres database (Neon works).
 
 ```bash
+cp .env.example .env.local
+# Set DATABASE_URL and SESSION_SECRET in .env.local
+# Also copy the same DATABASE_URL into .env for Prisma CLI, or rely on prisma.config.ts + dotenv
+
+npm install
+npx prisma migrate deploy
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Useful scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Local Next.js server |
+| `npm run build` | Production build |
+| `npm test` | Vitest (import conversion) |
+| `npm run db:seed` | Upsert Alice/Bob + welcome doc |
+| `npm run db:migrate` | Apply Prisma migrations |
 
-## Learn More
+## What works end to end
 
-To learn more about Next.js, take a look at the following resources:
+- Login with seeded accounts
+- Create / rename / edit / autosave / reopen documents
+- Rich text: bold, italic, underline, headings, bullet & numbered lists
+- Import `.txt` / `.md` into a new editable document
+- Attach files to a document and download them
+- Share with another user as **viewer** or **editor**
+- Home lists: **Owned by you** vs **Shared with you**
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Intentionally incomplete / next 2–4 hours
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Real-time co-editing, comments, version history
+- `.docx` import/export
+- Signup / OAuth (seeded auth only)
+- Stronger markdown fidelity and mobile polish
 
-## Deploy on Vercel
+With more time: add viewer vs editor UI badges on the editor chrome, soft-delete, and attachment previews.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Architecture & AI notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [AI_WORKFLOW.md](./AI_WORKFLOW.md)
+- [SUBMISSION.md](./SUBMISSION.md)
+- Walkthrough URL: [WALKTHROUGH_URL.txt](./WALKTHROUGH_URL.txt)
