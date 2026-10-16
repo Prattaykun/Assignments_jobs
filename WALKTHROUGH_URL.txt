@@ -1,1 +1,1 @@
-WALKTHROUGH_URL=https://www.loom.com/share/REPLACE_ME
+WALKTHROUGH_URL=https://youtu.be/NRsXfUezjDI
