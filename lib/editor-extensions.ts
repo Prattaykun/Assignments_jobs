@@ -26,6 +26,12 @@ export function createEditorExtensions(options?: {
 }): Extensions {
   const extensions: Extensions = [
     StarterKit.configure({
+      // TipTap v3 StarterKit includes these; we configure them below.
+      link: false,
+      underline: false,
+      undoRedo: {
+        depth: 200,
+      },
       codeBlock: {
         HTMLAttributes: {
           class:
@@ -52,6 +58,8 @@ export function createEditorExtensions(options?: {
       allowBase64: true,
       HTMLAttributes: {
         class: "max-w-full h-auto rounded-md my-3 block",
+        // Lets GitHub / CDN assets load when the page referrer is blocked.
+        referrerpolicy: "no-referrer",
       },
     }),
     Table.configure({

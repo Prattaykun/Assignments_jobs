@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
 import { EditorToolbar } from "./EditorToolbar";
@@ -8,7 +9,13 @@ import { EditorTitleBar } from "./EditorTitleBar";
 import { ShareDialog } from "./ShareDialog";
 import { AttachmentsPanel } from "./AttachmentsPanel";
 import { DocumentsNavBreadcrumb } from "./DocumentsNavBreadcrumb";
+import { EditorContextMenu } from "./EditorContextMenu";
+import { KeyboardShortcutsDialog } from "./KeyboardShortcutsDialog";
+import { LinkDialog } from "./LinkDialog";
+import { RemoteCursors } from "./RemoteCursors";
 import { createEditorExtensions } from "@/lib/editor-extensions";
+import { useEditorShortcuts } from "@/hooks/useEditorShortcuts";
+import { useDocumentPresence } from "@/hooks/useDocumentPresence";
 
 type ShareRow = {
   id: string;
@@ -54,6 +61,7 @@ export function DocumentEditor({
   accessLabel,
   folderCrumbs = [],
 }: Props) {
+  const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
   const [shares, setShares] = useState(initialShares);
   const [attachments, setAttachments] = useState(initialAttachments);
@@ -61,7 +69,19 @@ export function DocumentEditor({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [linkDialog, setLinkDialog] = useState<{
+    url: string;
+    text: string;
+    hasSelection: boolean;
+  } | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paperRef = useRef<HTMLDivElement>(null);
   const latestTitle = useRef(title);
   latestTitle.current = title;
 
@@ -128,19 +148,144 @@ export function DocumentEditor({
     };
   }, []);
 
+  const openLinkDialog = useCallback(() => {
+    if (!editor || !canEdit) return;
+    setCtxMenu(null);
+    const { from, to, empty } = editor.state.selection;
+    const selectedText = empty
+      ? ""
+      : editor.state.doc.textBetween(from, to, " ");
+    const existing =
+      (editor.getAttributes("link").href as string | undefined) || "";
+    setLinkDialog({
+      url: existing || "https://",
+      text: selectedText,
+      hasSelection: !empty,
+    });
+  }, [editor, canEdit]);
+
+  const applyLink = useCallback(
+    (url: string, text?: string) => {
+      if (!editor) return;
+      const href = url.trim();
+      if (!href) return;
+
+      if (linkDialog?.hasSelection) {
+        editor
+          .chain()
+          .focus()
+          .extendMarkRange("link")
+          .setLink({ href })
+          .run();
+      } else {
+        const label = (text || href).trim() || href;
+        editor
+          .chain()
+          .focus()
+          .insertContent({
+            type: "text",
+            text: label,
+            marks: [{ type: "link", attrs: { href } }],
+          })
+          .run();
+      }
+      setLinkDialog(null);
+    },
+    [editor, linkDialog?.hasSelection]
+  );
+
+  const removeLink = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    setLinkDialog(null);
+  }, [editor]);
+
   async function saveTitle() {
     const next = title.trim();
     if (!next) return;
     await persist({ title: next });
   }
 
-  async function saveNow() {
+  const saveNow = useCallback(async () => {
     if (!editor) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     await persist({
       title: latestTitle.current.trim() || title,
       contentJson: editor.getJSON(),
     });
+  }, [editor, persist, title]);
+
+  useEditorShortcuts({
+    editor,
+    canEdit,
+    onSave: () => void saveNow(),
+    onOpenShortcutsHelp: () => setShortcutsOpen(true),
+    onInsertLink: openLinkDialog,
+  });
+
+  const { peers } = useDocumentPresence({
+    documentId,
+    editor,
+    enabled: true,
+  });
+
+  async function exportPdf() {
+    setExportingPdf(true);
+    setError(null);
+    try {
+      // Persist latest content so the PDF matches the editor.
+      if (canEdit && editor) {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        await persist({
+          title: latestTitle.current.trim() || title,
+          contentJson: editor.getJSON(),
+        });
+      }
+
+      const res = await fetch(`/api/documents/${documentId}/export/pdf`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "PDF export failed");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(title || "document").replace(/[^\w\s\-]+/g, "").trim() || "document"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "PDF export failed");
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
+  async function deleteDocument() {
+    if (!isOwner) return;
+    if (
+      !window.confirm(
+        `Move “${title || "Untitled"}” to trash? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      router.push("/documents");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    }
   }
 
   async function refreshMeta() {
@@ -195,7 +340,10 @@ export function DocumentEditor({
         isOwner={isOwner}
         onShare={() => setShareOpen(true)}
         onSaveNow={() => void saveNow()}
-        editor={editor}
+        onDelete={() => void deleteDocument()}
+        onExportPdf={() => void exportPdf()}
+        exportingPdf={exportingPdf}
+        peers={peers}
       />
 
       <div className="bg-[#eef1f5] pb-1">
@@ -204,6 +352,7 @@ export function DocumentEditor({
           disabled={!canEdit}
           zoom={zoom}
           onZoomChange={setZoom}
+          onInsertLink={openLinkDialog}
         />
       </div>
 
@@ -214,21 +363,32 @@ export function DocumentEditor({
       )}
 
       <div className="flex-1 overflow-auto">
-        <div className="mx-auto flex flex-col xl:flex-row gap-6 px-4 py-8 items-start justify-center">
+        {/* w-fit keeps paper + attachments as one group so they stay adjacent */}
+        <div className="mx-auto w-fit max-w-full flex flex-col xl:flex-row gap-4 px-4 py-8 items-start">
           <div
-            className="w-full shrink-0 origin-top transition-transform mx-auto"
+            className="shrink-0 origin-top transition-transform"
             style={{
               maxWidth: PAPER_WIDTH_PX,
               width: PAPER_WIDTH_PX,
               transform: `scale(${zoom})`,
-              transformOrigin: "top center",
+              transformOrigin: "top left",
             }}
           >
             <div
-              className="doc-paper rounded-sm border border-[#dadce0] bg-white shadow-[0_1px_3px_rgba(60,64,67,0.15)] px-14 py-14 min-h-[70vh] overflow-x-hidden"
+              ref={paperRef}
+              className="doc-paper relative rounded-sm border border-[#dadce0] bg-white shadow-[0_1px_3px_rgba(60,64,67,0.15)] px-14 py-14 min-h-[70vh] overflow-x-hidden"
               style={{ width: PAPER_WIDTH_PX, maxWidth: PAPER_WIDTH_PX }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtxMenu({ x: e.clientX, y: e.clientY });
+              }}
             >
               <EditorContent editor={editor} className="doc-editor-content" />
+              <RemoteCursors
+                editor={editor}
+                peers={peers}
+                containerRef={paperRef}
+              />
             </div>
           </div>
           <div className="w-full xl:w-[280px] shrink-0 xl:sticky xl:top-4">
@@ -241,6 +401,30 @@ export function DocumentEditor({
           </div>
         </div>
       </div>
+
+      <EditorContextMenu
+        editor={editor}
+        canEdit={canEdit}
+        open={!!ctxMenu}
+        position={ctxMenu ?? { x: 0, y: 0 }}
+        onClose={() => setCtxMenu(null)}
+        onInsertLink={openLinkDialog}
+      />
+
+      <LinkDialog
+        open={!!linkDialog}
+        initialUrl={linkDialog?.url}
+        initialText={linkDialog?.text}
+        hasSelection={!!linkDialog?.hasSelection}
+        onClose={() => setLinkDialog(null)}
+        onApply={applyLink}
+        onRemove={removeLink}
+      />
+
+      <KeyboardShortcutsDialog
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+      />
 
       <ShareDialog
         open={shareOpen}

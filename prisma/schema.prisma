@@ -13,14 +13,15 @@ enum ShareRole {
 }
 
 model User {
-  id           String          @id @default(cuid())
-  email        String          @unique
+  id           String             @id @default(cuid())
+  email        String             @unique
   name         String
   passwordHash String
-  createdAt    DateTime        @default(now())
-  documents    Document[]      @relation("OwnedDocuments")
+  createdAt    DateTime           @default(now())
+  documents    Document[]         @relation("OwnedDocuments")
   shares       DocumentShare[]
   folders      Folder[]
+  presence     DocumentPresence[]
 }
 
 model Folder {
@@ -40,20 +41,39 @@ model Folder {
 }
 
 model Document {
-  id          String          @id @default(cuid())
+  id          String             @id @default(cuid())
   title       String
   contentJson Json
   ownerId     String
   folderId    String?
-  owner       User            @relation("OwnedDocuments", fields: [ownerId], references: [id], onDelete: Cascade)
-  folder      Folder?         @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  owner       User               @relation("OwnedDocuments", fields: [ownerId], references: [id], onDelete: Cascade)
+  folder      Folder?            @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
   shares      DocumentShare[]
   attachments Attachment[]
+  presence    DocumentPresence[]
 
   @@index([ownerId])
   @@index([folderId])
+}
+
+/** Ephemeral “who’s editing” rows — purged on every heartbeat when stale. */
+model DocumentPresence {
+  id         String   @id @default(cuid())
+  documentId String
+  userId     String
+  /** TipTap/ProseMirror selection anchor */
+  cursorFrom Int      @default(1)
+  /** TipTap/ProseMirror selection head */
+  cursorTo   Int      @default(1)
+  lastSeenAt DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId, lastSeenAt])
+  @@index([lastSeenAt])
 }
 
 model DocumentShare {

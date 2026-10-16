@@ -47,15 +47,20 @@ function timingSafeEqual(a: string, b: string): boolean {
   return out === 0;
 }
 
+/**
+ * Shared fallback used when SESSION_SECRET is unset.
+ * Must stay identical for Edge middleware and Node route handlers —
+ * a mismatch signs cookies the middleware cannot verify (login loop).
+ */
+export const FALLBACK_SESSION_SECRET =
+  "docs-assignment-dev-session-secret-key-32chars";
+
 /** Resolve session secret for both Node route handlers and Edge middleware. */
 export function resolveSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (secret && secret.length >= 16) return secret;
-  // Local/dev fallback so middleware + API always share the same key.
-  if (process.env.NODE_ENV !== "production") {
-    return "docs-assignment-dev-session-secret-key-32";
-  }
-  return "";
+  // Always fall back so Edge + Node never diverge when the host omits env.
+  return FALLBACK_SESSION_SECRET;
 }
 
 export async function signSessionToken(

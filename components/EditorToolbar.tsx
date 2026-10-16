@@ -65,6 +65,7 @@ type Props = {
   disabled?: boolean;
   zoom: number;
   onZoomChange: (zoom: number) => void;
+  onInsertLink?: () => void;
 };
 
 function currentFontSize(editor: Editor): string {
@@ -85,6 +86,7 @@ export function EditorToolbar({
   disabled,
   zoom,
   onZoomChange,
+  onInsertLink,
 }: Props) {
   const [, setTick] = useState(0);
   const refresh = useCallback(() => setTick((n) => n + 1), []);
@@ -121,17 +123,6 @@ export function EditorToolbar({
   const bumpSize = (delta: number) => {
     const next = Math.min(72, Math.max(8, Number(fontSize) + delta));
     editor.chain().focus().setFontSize(`${next}pt`).run();
-  };
-
-  const insertLink = () => {
-    const prev = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", prev || "https://");
-    if (url === null) return;
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   };
 
   return (
@@ -295,7 +286,7 @@ export function EditorToolbar({
           shortcut="Ctrl+K"
           active={editor.isActive("link")}
           disabled={disabled}
-          onClick={insertLink}
+          onClick={() => onInsertLink?.()}
         >
           <IconLink size={ICON} />
         </ToolbarButton>

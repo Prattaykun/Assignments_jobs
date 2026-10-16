@@ -1,76 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import type { Editor } from "@tiptap/react";
 import { DocLogo } from "./toolbar/icons";
-
-type MenuItem =
-  | { type: "item"; label: string; shortcut?: string; onClick?: () => void; disabled?: boolean }
-  | { type: "sep" };
-
-function Menu({
-  label,
-  disabled,
-  items,
-}: {
-  label: string;
-  disabled?: boolean;
-  items: MenuItem[];
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        disabled={disabled}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => setOpen((v) => !v)}
-        className="px-2.5 py-1 text-sm rounded text-[#202124] hover:bg-[#f1f3f4] disabled:opacity-40"
-      >
-        {label}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-50 mt-0.5 min-w-[220px] rounded-lg border border-[#dadce0] bg-white py-1 shadow-lg">
-          {items.map((item, i) =>
-            item.type === "sep" ? (
-              <div key={i} className="my-1 h-px bg-[#e8eaed]" />
-            ) : (
-              <button
-                key={i}
-                type="button"
-                disabled={item.disabled}
-                className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-[#202124] hover:bg-[#f1f3f4] disabled:opacity-40"
-                onClick={() => {
-                  item.onClick?.();
-                  setOpen(false);
-                }}
-              >
-                <span>{item.label}</span>
-                {item.shortcut && (
-                  <span className="text-xs text-[#5f6368] font-mono">
-                    {item.shortcut}
-                  </span>
-                )}
-              </button>
-            )
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import type { PresencePeer } from "@/hooks/useDocumentPresence";
 
 type Props = {
   title: string;
@@ -82,7 +14,10 @@ type Props = {
   isOwner: boolean;
   onShare: () => void;
   onSaveNow: () => void;
-  editor: Editor | null;
+  onDelete?: () => void;
+  onExportPdf?: () => void;
+  exportingPdf?: boolean;
+  peers?: PresencePeer[];
 };
 
 export function EditorTitleBar({
@@ -95,10 +30,11 @@ export function EditorTitleBar({
   isOwner,
   onShare,
   onSaveNow,
-  editor,
+  onDelete,
+  onExportPdf,
+  exportingPdf,
+  peers = [],
 }: Props) {
-  const ed = editor;
-
   return (
     <div
       className="flex items-stretch bg-[#eef1f5] text-[#1f2937] pt-2 pb-1"
@@ -122,7 +58,7 @@ export function EditorTitleBar({
       </div>
 
       <div className="flex flex-col justify-center flex-1 min-w-0 py-1 overflow-hidden">
-        <div className="flex items-center gap-2 px-1 min-w-0">
+        <div className="flex items-center gap-2 px-1 min-w-0 flex-wrap">
           <input
             value={title}
             disabled={!canEdit}
@@ -141,158 +77,63 @@ export function EditorTitleBar({
           <span className="text-[10px] rounded-full bg-white/80 border border-[#dadce0] px-2 py-0.5 text-[#5f6368] whitespace-nowrap">
             {accessLabel}
           </span>
+          {peers.length > 0 && (
+            <div
+              className="flex items-center gap-1.5 min-w-0"
+              title={peers.map((p) => p.name).join(", ")}
+            >
+              {peers.slice(0, 4).map((p) => (
+                <span
+                  key={p.userId}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#dadce0] bg-white pl-0.5 pr-2 py-0.5 text-[11px] text-[#202124] max-w-[140px]"
+                >
+                  <span
+                    className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                    style={{ backgroundColor: p.color }}
+                    aria-hidden
+                  >
+                    {p.name.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="truncate">{p.name}</span>
+                  <span className="text-[#5f6368] shrink-0">editing</span>
+                </span>
+              ))}
+              {peers.length > 4 && (
+                <span className="text-[11px] text-[#5f6368]">
+                  +{peers.length - 4}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        <div
-          className="flex items-center px-1 min-w-0 overflow-x-auto"
-          style={{ scrollbarWidth: "none" }}
-          role="toolbar"
-          aria-label="Document menus"
-        >
-          <Menu
-            label="File"
-            disabled={!ed}
-            items={[
-              {
-                type: "item",
-                label: "Save now",
-                shortcut: "Ctrl+S",
-                disabled: !canEdit,
-                onClick: onSaveNow,
-              },
-              { type: "sep" },
-              {
-                type: "item",
-                label: "Print",
-                shortcut: "Ctrl+P",
-                onClick: () => window.print(),
-              },
-            ]}
-          />
-          <Menu
-            label="Edit"
-            disabled={!ed}
-            items={[
-              {
-                type: "item",
-                label: "Undo",
-                shortcut: "Ctrl+Z",
-                disabled: !ed?.can().undo(),
-                onClick: () => ed?.chain().focus().undo().run(),
-              },
-              {
-                type: "item",
-                label: "Redo",
-                shortcut: "Ctrl+Y",
-                disabled: !ed?.can().redo(),
-                onClick: () => ed?.chain().focus().redo().run(),
-              },
-              { type: "sep" },
-              {
-                type: "item",
-                label: "Select all",
-                shortcut: "Ctrl+A",
-                onClick: () => ed?.chain().focus().selectAll().run(),
-              },
-            ]}
-          />
-          <Menu
-            label="Format"
-            disabled={!ed || !canEdit}
-            items={[
-              {
-                type: "item",
-                label: "Bold",
-                shortcut: "Ctrl+B",
-                onClick: () => ed?.chain().focus().toggleBold().run(),
-              },
-              {
-                type: "item",
-                label: "Italic",
-                shortcut: "Ctrl+I",
-                onClick: () => ed?.chain().focus().toggleItalic().run(),
-              },
-              {
-                type: "item",
-                label: "Underline",
-                shortcut: "Ctrl+U",
-                onClick: () => ed?.chain().focus().toggleUnderline().run(),
-              },
-              { type: "sep" },
-              {
-                type: "item",
-                label: "Clear formatting",
-                onClick: () =>
-                  ed?.chain().focus().unsetAllMarks().clearNodes().run(),
-              },
-            ]}
-          />
-          <Menu
-            label="View"
-            items={[
-              {
-                type: "item",
-                label: "Zoom 100%",
-                onClick: () => undefined,
-              },
-            ]}
-          />
-          <Menu
-            label="Insert"
-            disabled={!ed || !canEdit}
-            items={[
-              {
-                type: "item",
-                label: "Link…",
-                shortcut: "Ctrl+K",
-                onClick: () => {
-                  const url = window.prompt("Link URL", "https://");
-                  if (!url) return;
-                  ed?.chain().focus().setLink({ href: url }).run();
-                },
-              },
-              {
-                type: "item",
-                label: "Bullet list",
-                onClick: () => ed?.chain().focus().toggleBulletList().run(),
-              },
-              {
-                type: "item",
-                label: "Numbered list",
-                onClick: () => ed?.chain().focus().toggleOrderedList().run(),
-              },
-            ]}
-          />
-          <Menu
-            label="Tools"
-            items={[
-              {
-                type: "item",
-                label: "Word count",
-                onClick: () => {
-                  const text = ed?.getText() ?? "";
-                  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-                  window.alert(`${words} words · ${text.length} characters`);
-                },
-              },
-            ]}
-          />
-          <Menu
-            label="Help"
-            items={[
-              {
-                type: "item",
-                label: "Back to documents",
-                onClick: () => {
-                  window.location.href = "/documents";
-                },
-              },
-            ]}
-          />
-        </div>
+        {isOwner && onDelete && (
+          <div className="flex items-center px-1 pt-0.5">
+            <button
+              type="button"
+              onClick={onDelete}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="px-2.5 py-1 text-sm rounded text-[#c5221f] hover:bg-[#fce8e6]"
+            >
+              Delete
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center flex-shrink-0 gap-2 px-3">
+        {onExportPdf && (
+          <button
+            type="button"
+            onClick={onExportPdf}
+            disabled={exportingPdf}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="inline-flex text-sm px-3 py-1.5 rounded-full border border-[#dadce0] bg-white hover:bg-[#f1f3f4] text-[#202124] disabled:opacity-60"
+            title="Export PDF via Browserless"
+          >
+            {exportingPdf ? "Exporting…" : "Export PDF"}
+          </button>
+        )}
         {canEdit && (
           <button
             type="button"

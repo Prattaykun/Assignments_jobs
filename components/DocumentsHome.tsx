@@ -130,6 +130,28 @@ export function DocumentsHome({
     }
   }
 
+  async function deleteDocument(id: string, title: string) {
+    if (
+      !window.confirm(
+        `Delete “${title}”? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setBusy(`del-doc-${id}`);
+    setError(null);
+    try {
+      const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Delete failed");
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function onImport(file: File) {
     setBusy("import");
     setError(null);
@@ -247,7 +269,7 @@ export function DocumentsHome({
             ))}
 
             {owned.map((doc) => (
-              <li key={doc.id}>
+              <li key={doc.id} className="group relative">
                 <Link
                   href={`/documents/${doc.id}`}
                   className="flex flex-col items-center gap-2 rounded-2xl border border-transparent bg-paper/80 px-3 py-4 text-center shadow-sm hover:border-[#1a73e8]/30 hover:bg-white hover:shadow-md transition"
@@ -266,6 +288,19 @@ export function DocumentsHome({
                     {formatDate(doc.updatedAt)}
                   </span>
                 </Link>
+                <button
+                  type="button"
+                  title="Delete document"
+                  disabled={!!busy}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void deleteDocument(doc.id, doc.title);
+                  }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 rounded-md p-1 bg-white/90 border border-border text-danger hover:bg-red-50 transition"
+                >
+                  <Trash2 size={14} />
+                </button>
               </li>
             ))}
           </ul>

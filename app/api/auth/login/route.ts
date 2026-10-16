@@ -29,11 +29,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // Critically: attach Set-Cookie on the Response so the browser stores it.
+    // Attach Set-Cookie on the Response only (do not also use cookies().set).
     const response = NextResponse.json({
       user: { id: user.id, email: user.email, name: user.name },
     });
     response.cookies.set(COOKIE_NAME, user.token, sessionCookieOptions());
+    response.headers.set("Cache-Control", "no-store, max-age=0");
     return response;
   } catch (err) {
     console.error(err);

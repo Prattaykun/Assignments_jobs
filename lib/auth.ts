@@ -26,9 +26,6 @@ export async function createSessionToken(user: {
   email: string;
 }) {
   const secret = resolveSessionSecret();
-  if (!secret) {
-    throw new Error("SESSION_SECRET must be set (min 16 chars)");
-  }
   return signSessionToken(
     {
       userId: user.id,
@@ -47,11 +44,9 @@ export async function loginWithPassword(email: string, password: string) {
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return null;
 
+  // Cookie is set only on the Route Handler Response (not cookies()).
+  // Dual-setting can drop Set-Cookie in Next.js App Router responses.
   const token = await createSessionToken(user);
-
-  // Also set via cookies() for server components in the same request tree.
-  const jar = await cookies();
-  jar.set(COOKIE_NAME, token, sessionCookieOptions());
 
   return {
     id: user.id,

@@ -1,11 +1,1 @@
-PENDING — record a 3–5 minute unlisted Loom or YouTube walkthrough covering:
-1) main user flow (login → create → edit → save → reopen)
-2) import + attachments
-3) sharing Alice → Bob (owned vs shared)
-4) intentional deprioritizations
-5) key implementation decisions
-6) how AI supported the workflow
-
-Paste the public unlisted URL on the line below, replacing this placeholder:
-
 WALKTHROUGH_URL=https://www.loom.com/share/REPLACE_ME
